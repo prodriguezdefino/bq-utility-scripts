@@ -1,0 +1,4 @@
+functions-framework
+cloudevents
+google-cloud-storage
+google-cloud-bigquery
