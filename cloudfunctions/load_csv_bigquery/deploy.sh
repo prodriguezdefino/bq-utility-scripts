@@ -1,7 +1,14 @@
 #!/bin/bash
 set -eux
 
+if [ "$#" -ne 2 ]
+  then
+    echo "Usage : sh deploy.sh <gcp bucket> <bq dataset>"
+    exit -1
+fi
+
 BUCKET_NAME=$1
+DATASET=$2
 CF_NAME=load-vertex-usage-reports
 REGION=us-central1
 PROJECT_ID=$(gcloud config get-value project)
@@ -41,6 +48,7 @@ gcloud functions deploy $CF_NAME \
     --runtime=python312 \
     --region=$REGION \
     --source=. \
+    --set-env-vars "GCP_PROJECT=${PROJECT_ID},DATASET=${DATASET}" \
     --retry \
     --service-account=$SA_EMAIL \
     --entry-point=gcs_object_listener \

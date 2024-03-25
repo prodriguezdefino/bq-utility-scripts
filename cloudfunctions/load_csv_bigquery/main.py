@@ -16,14 +16,11 @@ from cloudevents.http import CloudEvent
 from google.cloud import bigquery
 from pathlib import Path
 from google.cloud import storage
-from google.auth import default
 
 import functions_framework
 import sys
 import os
 import re
-
-_, project_id = default()
 
 def list_objects_bucket(bucket, prefix_path):
     client = storage.Client()
@@ -51,7 +48,7 @@ def gcs_object_listener(cloud_event: CloudEvent) -> tuple:
     print(f"Metageneration: {metageneration}")
     print(f"Created: {timeCreated}")
     print(f"Updated: {updated}")
-    print(f"Content type: {updated}")
+    print(f"Content type: {content_type}")
 
     if content_type == "text/csv":
         load_csv_into_bq(extract_table_id(name), bucket, name)
@@ -64,7 +61,8 @@ def extract_table_id(file_name: str) -> str:
     no_date_name = re.sub(r"\d{4}-\d{2}-\d{2}","", name)
     no_whitespace_name = '_'.join(no_date_name.split())
     lowercase_name = no_whitespace_name.lower()
-    dataset = "vertex_usage"
+    project_id = os.environ["GCP_PROJECT"]
+    dataset = os.environ["DATASET"]
     table_id = f"{project_id}.{dataset}.{lowercase_name}"
     return table_id
 
