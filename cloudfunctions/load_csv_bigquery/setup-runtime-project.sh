@@ -14,7 +14,6 @@ REGION=us-central1
 PROJECT_ID=$1
 DATA_PROJECT_ID=$2
 SA_EMAIL=$5
-PROJECT_NUMBER=$(gcloud projects list --filter="project_id:$PROJECT_ID" --format='value(project_number)')
 
 #create cloud function
 gcloud functions deploy $CF_NAME \
