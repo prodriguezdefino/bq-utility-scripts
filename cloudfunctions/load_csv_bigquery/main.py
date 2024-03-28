@@ -21,6 +21,9 @@ import functions_framework
 import sys
 import os
 import re
+import base64
+import json
+
 
 def list_objects_bucket(bucket, prefix_path):
     client = storage.Client()
@@ -29,7 +32,7 @@ def list_objects_bucket(bucket, prefix_path):
 
 @functions_framework.cloud_event
 def gcs_object_listener(cloud_event: CloudEvent) -> tuple:
-    data = cloud_event.data
+    data = json.loads(base64.b64decode(cloud_event.data['message']['data']))
 
     event_id = cloud_event["id"]
     event_type = cloud_event["type"]
@@ -105,6 +108,7 @@ def load_gcs_files(bucket, root_path=""):
     files = list_objects_bucket(bucket, root_path)
     for file in files:
         load_gcs_file(bucket, file)
+
 
 if __name__ == '__main__':
     load_gcs_files(sys.argv[1])
