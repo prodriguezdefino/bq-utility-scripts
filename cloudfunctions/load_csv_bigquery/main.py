@@ -23,6 +23,7 @@ import os
 import re
 import base64
 import json
+import argparse
 
 
 def list_objects_bucket(bucket, prefix_path):
@@ -59,13 +60,13 @@ def gcs_object_listener(cloud_event: CloudEvent) -> tuple:
     return event_id, event_type, bucket, name, metageneration, timeCreated, updated
 
 
-def extract_table_id(file_name: str) -> str:
+def extract_table_id(file_name: str, project="", dataset="") -> str:
     name = Path(file_name).stem
     no_date_name = re.sub(r"\d{4}-\d{2}-\d{2}","", name)
     no_whitespace_name = '_'.join(no_date_name.split())
     lowercase_name = no_whitespace_name.lower()
-    project_id = os.environ["GCP_PROJECT"]
-    dataset = os.environ["DATASET"]
+    project_id = os.getenv("GCP_PROJECT", project)
+    dataset = os.getenv("DATASET", dataset)
     table_id = f"{project_id}.{dataset}.{lowercase_name}"
     return table_id
 
@@ -99,16 +100,27 @@ def load_csv_into_bq(table_id, bucket_name, file_path):
     print("Loaded data to table {}, num rows {}".format(table_id, table.num_rows))
 
 
-def load_gcs_file(bucket_name, file_name):
-    table_id = extract_table_id(file_name)
+def load_gcs_file(bucket_name, file_name, project="", dataset=""):
+    table_id = extract_table_id(file_name, project, dataset)
+    print(table_id)
     load_csv_into_bq(table_id, bucket_name, file_name)
 
 
-def load_gcs_files(bucket, root_path=""):
+def load_gcs_files(bucket, project="", dataset="", root_path=""):
     files = list_objects_bucket(bucket, root_path)
     for file in files:
-        load_gcs_file(bucket, file)
+        load_gcs_file(bucket, file, project, dataset)
 
 
 if __name__ == '__main__':
-    load_gcs_files(sys.argv[1])
+    parser = argparse.ArgumentParser(description='Load CSV file into BQ')
+    parser.add_argument('--project', required=True,
+                    help='gcp project for bq.')
+    parser.add_argument('--dataset', required=True,
+                    help='a bq dataset.')
+    parser.add_argument('--bucket', required=True,
+                    help='a gcs bucket.')
+
+    args = parser.parse_args()
+
+    load_gcs_files(args.bucket, project=args.project, dataset=args.dataset)
