@@ -25,10 +25,15 @@ import base64
 import json
 import argparse
 
+# GCP clients
+bq_client = bigquery.Client()
+storage_client = storage.Client()
+# date extraction regex
+date_regex = re.compile(r"(\d{4}-\d{2}-\d{2}|\d{4}\d{2}\d{2}|\d{4}-\d{2}|\d{4}\d{2})")
+
 
 def list_objects_bucket(bucket, prefix_path):
-    client = storage.Client()
-    return list(map(lambda b: b.name,  client.list_blobs(bucket, prefix=prefix_path)))
+    return list(map(lambda b: b.name,  storage_client.list_blobs(bucket, prefix=prefix_path)))
 
 
 @functions_framework.cloud_event
@@ -55,24 +60,43 @@ def gcs_object_listener(cloud_event: CloudEvent) -> tuple:
     print(f"Content type: {content_type}")
 
     if content_type == "text/csv":
-        load_csv_into_bq(extract_table_id(name), bucket, name)
+        table_id, partition = extract_table_id_and_partition(name)
+        load_csv_into_bq(table_id, partition, bucket, name)
 
     return event_id, event_type, bucket, name, metageneration, timeCreated, updated
 
 
-def extract_table_id(file_name: str, project="", dataset="") -> str:
+def extract_partition_from_name(file_name: str) -> str:
+    match = date_regex.match(file_name)
+    if match:
+        date = match.group().replace("-", "")
+        return "DAY" if len(date) == 8 else "MONTH"
+    return "NA"
+
+
+def extract_table_id_and_partition(file_name: str, project="", dataset="") -> (str, str):
     name = Path(file_name).stem
-    no_date_name = re.sub(r"\d{4}-\d{2}-\d{2}","", name)
+    no_date_name = date_regex.sub("", name)
     no_whitespace_name = '_'.join(no_date_name.split())
     lowercase_name = no_whitespace_name.lower()
     project_id = os.getenv("GCP_PROJECT", project)
     dataset = os.getenv("DATASET", dataset)
     table_id = f"{project_id}.{dataset}.{lowercase_name}"
-    return table_id
+    return (table_id, extract_partition_from_name(name))
 
 
-def load_csv_into_bq(table_id, bucket_name, file_path):
-    client = bigquery.Client()
+def time_partitioning(partition: str):
+    if partition == "DAY":
+        return bigquery.TimePartitioning(
+            type_=bigquery.TimePartitioningType.DAY,
+            field="date",
+        )
+    if partition == "MONTH":
+        return None
+    return None
+
+
+def load_csv_into_bq(table_id, partition, bucket_name, file_path):
 
     job_config = bigquery.LoadJobConfig(
         create_disposition="CREATE_IF_NEEDED",
@@ -83,27 +107,23 @@ def load_csv_into_bq(table_id, bucket_name, file_path):
         ],
         autodetect=True,
         skip_leading_rows=1,
-        time_partitioning=bigquery.TimePartitioning(
-            type_=bigquery.TimePartitioningType.DAY,
-            field="date",
-        ),
     )
     uri = f"gs://{bucket_name}/{file_path}"
 
-    load_job = client.load_table_from_uri(
+    load_job = bq_client.load_table_from_uri(
         uri, table_id, job_config=job_config
     )  # Make an API request.
 
     load_job.result()  # Wait for the job to complete.
 
-    table = client.get_table(table_id)
+    table = bq_client.get_table(table_id)
     print("Loaded data to table {}, num rows {}".format(table_id, table.num_rows))
 
 
 def load_gcs_file(bucket_name, file_name, project="", dataset=""):
-    table_id = extract_table_id(file_name, project, dataset)
-    print(table_id)
-    load_csv_into_bq(table_id, bucket_name, file_name)
+    table_id, partition = extract_table_id_and_partition(file_name, project, dataset)
+    print(f"will upload data to table: {table_id} with partition {partition}")
+    load_csv_into_bq(table_id, partition, bucket_name, file_name)
 
 
 def load_gcs_files(bucket, project="", dataset="", root_path=""):
