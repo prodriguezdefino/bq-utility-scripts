@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import List
 
 
-
 # date extraction regex
 date_regex = re.compile(r"(\d{4}-\d{2}-\d{2}|\d{4}\d{2}\d{2}|\d{4}-\d{2}|\d{4}\d{2})")
 
@@ -18,13 +17,13 @@ date_regex = re.compile(r"(\d{4}-\d{2}-\d{2}|\d{4}\d{2}\d{2}|\d{4}-\d{2}|\d{4}\d
 # creates a Credentials object impersonating the provided service account and scopes
 def create_impersonated_credentials(
     impersonated_service_account: str,
-    scope: str = "cloud-platform"):
+    scope: str = "https://www.googleapis.com/auth/cloud-platform"):
     from google.auth import impersonated_credentials
     import google.auth
 
     credentials, project_id = google.auth.default()
 
-    target_credentials = impersonated_credentials.Credentials(
+    return impersonated_credentials.Credentials(
         source_credentials=credentials,
         target_principal=impersonated_service_account,
         delegates=[],
@@ -34,7 +33,6 @@ def create_impersonated_credentials(
 
 
 def should_process(run_date: str, file_date: str) -> bool:
-    print(f'comparison {run_date} and {file_date}')
     return run_date == file_date
 
 
@@ -48,6 +46,8 @@ def extract_date_from_filename(file_name: str) -> str:
     return "NA"
 
 
+# given a run date for the dag, a bucket, path prefix and a service account to impersonate,
+# returns the list of files to be procesed.
 def list_objects_bucket(
         run_date: str,
         bucket: str,
