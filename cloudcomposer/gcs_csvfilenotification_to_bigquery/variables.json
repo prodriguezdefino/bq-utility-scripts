@@ -1,0 +1,7 @@
+{
+    "project" : "use a file named variables__local.json to populate the composer environment variables.",
+    "dataset" : "the create_environment.sh script will take care of populating the values once the composer env is created.",
+    "bucket" : "",
+    "service_account" : ""
+}
+
